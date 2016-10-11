@@ -1,0 +1,986 @@
+
+=====================================================================================================
+This textfile contains the TE-queries for all multi-tuple constraints of the example database design.
+These queries are based on TE-views; three per table, one for insert, one for update and one for
+delete.
+
+The TE-views are named 'V_AD_<table alias>_<DML-type>TE.
+- AD is shortname for AM4DP.
+- <table alias> is a single character denoting the table.
+- <DML-type> is I for insert, U for update, D for delete.
+
+The TE-queries support execution model EM6 where the column values that are retrieved are passed as 
+parameters to the constraint validation (CV) queries. You can find the CV queries for all multi-tuple
+constraints in file em6_CV_queries.txt.
+=====================================================================================================
+
+D_TAB01: You cannot manage more than two departments.
+DEPT insert TE-query:
+   select distinct mgr as mgr
+   from v_ad_d_ite
+
+D_TAB01: You cannot manage more than two departments.
+DEPT update TE-query:
+   select new_mgr as mgr
+   from v_ad_d_ute
+   where updated_mgr='TRUE'
+
+E_TAB02: At most one PRESIDENT allowed.
+EMP insert TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_e_ite
+   where job = 'PRESIDENT'
+
+E_TAB02: At most one PRESIDENT allowed.
+EMP update TE-query:
+   select 'need to check' as NO_CASES
+   from (select num_promoted - num_demoted as increase
+         from (select count(*) as num_promoted
+               from v_ad_e_ute
+               where old_job <> 'PRESIDENT'
+                 and new_job = 'PRESIDENT')
+             ,(select count(*) as num_demoted
+               from v_ad_e_ute
+               where old_job = 'PRESIDENT'
+                 and new_job <> 'PRESIDENT'))
+   where increase > 0
+
+E_TAB03: Departments with PRESIDENT or MANAGER should have an ADMIN.
+EMP insert TE-query:
+   select distinct deptno as deptno
+   from v_ad_e_ite
+   where job in ('PRESIDENT','MANAGER')
+
+E_TAB03: Departments with PRESIDENT or MANAGER should have an ADMIN.
+EMP update TE-query:
+   select new_deptno as deptno
+   from v_ad_e_ute
+   where (updated_job='TRUE' or updated_deptno='TRUE')
+     and new_job in ('PRESIDENT','MANAGER')
+   union
+   select old_deptno as deptno
+   from v_ad_e_ute
+   where (updated_job='TRUE' or updated_deptno='TRUE')
+     and old_job ='ADMIN'
+
+E_TAB03: Departments with PRESIDENT or MANAGER should have an ADMIN.
+EMP delete TE-query:
+   select distinct deptno as deptno
+   from v_ad_e_dte
+   where job = 'ADMIN'
+
+G_TAB01: No gaps between two consecutive salary grades.
+GRD insert TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_g_ite
+
+G_TAB01: No gaps between two consecutive salary grades.
+GRD update TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_g_ute
+   where updated_llimit='TRUE' or updated_ulimit='TRUE'
+
+G_TAB01: No gaps between two consecutive salary grades.
+GRD delete TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_g_dte
+
+H_TAB01: Department number or monthly salary (or both) must have changed between two consecutive rows.
+HIST insert TE-query:
+   select distinct empno as empno
+   from v_ad_h_ite
+
+H_TAB01: Department number or monthly salary (or both) must have changed between two consecutive rows.
+HIST update TE-query:
+   select new_empno as empno
+   from v_ad_h_ute
+   where updated_empno='TRUE'
+      or updated_until='TRUE'
+      or updated_msal='TRUE'
+      or updated_deptno='TRUE'
+   union
+   select old_empno as empno
+   from v_ad_h_ute
+   where updated_empno='TRUE'
+
+H_TAB01: Department number or monthly salary (or both) must have changed between two consecutive rows.
+HIST delete TE-query:
+   select distinct empno as empno
+   from v_ad_h_dte
+
+R_TAB01: Offering cannot be partially evaluated: fully or not at all.
+REG insert TE-query:
+   select distinct course as course, starts as starts
+   from v_ad_r_ite
+
+R_TAB01: Offering cannot be partially evaluated: fully or not at all.
+REG update TE-query:
+   select distinct new_course as course, new_starts as starts
+   from v_ad_r_ute
+   where updated_course='TRUE'
+      or updated_starts='TRUE'
+      or (updated_eval='TRUE' and (new_eval<>-1 and old_eval=-1 or
+                                   new_eval=-1 and old_eval<>-1))
+
+PODC1: Active employee cannot be managed by terminated employee.
+MEMP insert TE-query:
+   select empno as empno
+   from v_ad_m_ite
+
+PODC1: Active employee cannot be managed by terminated employee.
+TERM insert TE-query:
+   select empno as mgr
+   from v_ad_t_ite
+
+PODC1: Active employee cannot be managed by terminated employee.
+MEMP update TE-query:
+   select new_empno as empno
+   from v_ad_m_ute
+
+PODC1: Active employee cannot be managed by terminated employee.
+TERM update TE-query:
+   select new_empno as mgr
+   from v_ad_t_ute
+
+PODC2: Department cannot be managed by a terminated employee.
+DEPT insert TE-query:
+   select mgr as mgr
+   from v_ad_d_ite
+
+PODC2: Department cannot be managed by a terminated employee.
+TERM insert TE-query:
+   select empno as mgr
+   from v_ad_t_ite
+
+PODC2: Department cannot be managed by a terminated employee.
+DEPT update TE-query:
+   select new_mgr as mgr
+   from v_ad_d_ute
+
+PODC2: Department cannot be managed by a terminated employee.
+TERM update TE-query:
+   select new_empno as mgr
+   from v_ad_t_ute
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+OFFR insert TE-query:
+   select distinct trainer as trainer
+   from v_ad_o_ite
+   where status<>'CANC'
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+CRS update TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_c_ute
+   where updated_code='TRUE' or updated_dur='TRUE'
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+OFFR update TE-query:
+   select old_trainer as trainer
+   from v_ad_o_ute
+   where (updated_trainer='TRUE' or updated_course='TRUE' or updated_loc='TRUE' or
+          (updated_status='TRUE' and ((new_status<>'CANC' and old_status='CANC') or
+                                      (new_status='CANC' and old_status<>'CANC'))))
+   union
+   select new_trainer as trainer
+   from v_ad_o_ute
+   where (updated_trainer='TRUE' or updated_course='TRUE' or updated_loc='TRUE' or
+          (updated_status='TRUE' and ((new_status<>'CANC' and old_status='CANC') or
+                                      (new_status='CANC' and old_status<>'CANC'))))
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+EMP update TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_e_ute
+   where updated_empno='TRUE' or updated_deptno='TRUE'
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+DEPT update TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_d_ute
+   where updated_deptno='TRUE' or updated_loc='TRUE'
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+OFFR delete TE-query:
+   select distinct trainer as trainer
+   from v_ad_o_dte
+   where status<>'CANC'
+
+PODC4: Offerings with 6+ registrations must have status confirmed.
+REG insert TE-query:
+   select distinct course,starts
+   from v_ad_r_ite
+
+PODC4: Offerings with 6+ registrations must have status confirmed.
+REG update TE-query:
+   select distinct new_course as course,new_starts as starts
+   from v_ad_r_ute
+
+PODC4: Offerings with 6+ registrations must have status confirmed.
+OFFR update TE-query:
+   select distinct new_course as course,new_starts as starts
+   from v_ad_o_ute
+   where updated_course='TRUE' or updated_starts='TRUE'
+      or (updated_status='TRUE' and (new_status<>'CONF' and old_status='CONF'))
+
+PODC5: Number of registrations cannot exceed maximum capacity of offering.
+REG insert TE-query:
+   select course,starts
+   from v_ad_r_ite
+
+PODC5: Number of registrations cannot exceed maximum capacity of offering.
+REG update TE-query:
+   select new_course as course,new_starts as starts
+   from v_ad_r_ute
+   where updated_course='TRUE' or updated_starts='TRUE'
+
+PODC5: Number of registrations cannot exceed maximum capacity of offering.
+OFFR update TE-query:
+   select distinct new_course as course,new_starts as starts
+   from v_ad_o_ute
+   where updated_course='TRUE' or updated_starts='TRUE'
+      or (updated_maxcap='TRUE' and new_maxcap<old_maxcap)
+
+PODC6: Cancelled offerings cannot have registrations.
+REG insert TE-query:
+   select distinct course, starts
+   from v_ad_r_ite r
+
+
+PODC6: Cancelled offerings cannot have registrations.
+REG update TE-query:
+   select distinct new_course as course, new_starts as starts
+   from v_ad_r_ute r
+   where (r.updated_course='FALSE' and r.updated_starts='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (r.updated_course='FALSE' and r.updated_starts='FALSE') and
+          142=142)
+
+PODC6: Cancelled offerings cannot have registrations.
+OFFR update TE-query:
+   select new_course as course, new_starts as starts
+   from v_ad_o_ute o
+   where (o.updated_course='FALSE' and o.updated_starts='FALSE' and
+          o.new_status='CANC' and
+             (not (o.old_status='CANC') or
+              ((142=1965) and
+               142=142)))
+      or ( not (o.updated_course='FALSE' and o.updated_starts='FALSE') and
+          o.new_status='CANC')
+
+PODC7: QA conditions regarding the trainer of an offering (see PODC7).
+OFFR insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_o_ite
+
+PODC7: QA conditions regarding the trainer of an offering (see PODC7).
+EMP update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_e_ute
+   where updated_empno='TRUE'
+      or (updated_hired='TRUE' and new_hired>old_hired)
+
+PODC7: QA conditions regarding the trainer of an offering (see PODC7).
+OFFR update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_o_ute
+   where updated_course='TRUE' or updated_starts='TRUE' or updated_trainer='TRUE'
+
+PODC7: QA conditions regarding the trainer of an offering (see PODC7).
+REG update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_r_ute
+   where updated_course='TRUE' or updated_starts='TRUE' or updated_stud='TRUE'
+
+PODC7: QA conditions regarding the trainer of an offering (see PODC7).
+REG delete TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_r_dte
+
+PSPEC1A: Target and commission only allowed for Salesreps.
+SREP insert TE-query:
+   select distinct empno
+   from v_ad_s_ite s
+
+
+PSPEC1A: Target and commission only allowed for Salesreps.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          e.new_job<>'SALESREP' and
+             (not (e.old_job<>'SALESREP') or
+              ((142=1965) and
+               142=142)))
+      or ( not (e.updated_empno='FALSE') and
+          e.new_job<>'SALESREP')
+
+PSPEC1A: Target and commission only allowed for Salesreps.
+SREP update TE-query:
+   select distinct new_empno as empno
+   from v_ad_s_ute s
+   where (s.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (s.updated_empno='FALSE') and
+          142=142)
+
+PSPEC1B: Salesreps must have a target and commission.
+EMP insert TE-query:
+   select distinct empno as empno
+   from v_ad_e_ite
+   where job='SALESREP'
+
+PSPEC1B: Salesreps must have a target and commission.
+SREP update TE-query:
+   select distinct old_empno as empno
+   from v_ad_s_ute
+   where updated_empno='TRUE'
+
+PSPEC1B: Salesreps must have a target and commission.
+EMP update TE-query:
+   select distinct new_empno as empno
+   from v_ad_e_ute
+   where (updated_empno='TRUE' or updated_job='TRUE')
+     and new_job='SALESREP'
+
+PSPEC1B: Salesreps must have a target and commission.
+SREP delete TE-query:
+   select distinct empno as empno
+   from v_ad_s_dte
+
+PSPEC2A: Presidents are not managed.
+MEMP insert TE-query:
+   select distinct empno
+   from v_ad_m_ite m
+
+
+PSPEC2A: Presidents are not managed.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          e.new_job='PRESIDENT' and
+             (not (e.old_job='PRESIDENT') or
+              ((142=1965) and
+               142=142)))
+      or ( not (e.updated_empno='FALSE') and
+          e.new_job='PRESIDENT')
+
+PSPEC2A: Presidents are not managed.
+MEMP update TE-query:
+   select distinct new_empno as empno
+   from v_ad_m_ute m
+   where (m.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (m.updated_empno='FALSE') and
+          142=142)
+
+PSPEC2B: Employees (except presidents) must be managed.
+EMP insert TE-query:
+   select distinct empno as empno
+   from v_ad_e_ite
+   where job<>'PRESIDENT'
+
+PSPEC2B: Employees (except presidents) must be managed.
+MEMP update TE-query:
+   select distinct old_empno as empno
+   from v_ad_m_ute
+   where updated_empno='TRUE'
+
+PSPEC2B: Employees (except presidents) must be managed.
+EMP update TE-query:
+   select distinct new_empno as empno
+   from v_ad_e_ute
+   where (updated_empno='TRUE' or updated_job='TRUE')
+     and new_job<>'PRESIDENT'
+
+PSPEC2B: Employees (except presidents) must be managed.
+MEMP delete TE-query:
+   select distinct empno as empno
+   from v_ad_m_dte
+
+PSSR2: Dept mgr is a known employee, excluding admins and president.
+EMP insert TE-query:
+   select distinct empno as empno
+   from v_ad_e_ite
+
+PSSR2: Dept mgr is a known employee, excluding admins and president.
+DEPT insert TE-query:
+   select distinct mgr as empno
+   from v_ad_d_ite
+
+PSSR2: Dept mgr is a known employee, excluding admins and president.
+EMP update TE-query:
+   select distinct new_empno as empno
+   from v_ad_e_ute
+   where (updated_empno='TRUE' and new_job in ('ADMIN','PRESIDENT'))
+      or (updated_job='TRUE' and old_job not in ('ADMIN','PRESIDENT') and new_job in ('ADMIN','PRESIDENT'))
+
+PSSR2: Dept mgr is a known employee, excluding admins and president.
+DEPT update TE-query:
+   select distinct new_mgr as empno
+   from v_ad_d_ute
+   where updated_mgr='TRUE'
+
+PSSR3: Only president or managers can manage other employees.
+MEMP insert TE-query:
+   select distinct mgr as mgr_empno
+   from v_ad_m_ite
+
+PSSR3: Only president or managers can manage other employees.
+MEMP update TE-query:
+   select distinct new_mgr as mgr_empno
+   from v_ad_m_ute
+   where updated_mgr='TRUE'
+
+PSSR3: Only president or managers can manage other employees.
+EMP update TE-query:
+   select distinct new_empno as mgr_empno
+   from v_ad_e_ute
+   where (updated_empno='TRUE' and new_job not in ('MANAGER','PRESIDENT'))
+      or (updated_job='TRUE' and old_job in ('MANAGER','PRESIDENT') and new_job not in ('MANAGER','PRESIDENT'))
+
+PSSR4: Not all employees can be terminated.
+TERM insert TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_t_ite
+
+PSSR4: Not all employees can be terminated.
+EMP delete TE-query:
+   select distinct 'need to check' as NO_CASES
+   from v_ad_e_dte
+
+PSSR7: Courses take place in locations where we have a department.
+OFFR insert TE-query:
+   select distinct loc as loc
+   from v_ad_o_ite
+
+PSSR7: Courses take place in locations where we have a department.
+OFFR update TE-query:
+   select distinct new_loc as loc
+   from v_ad_o_ute
+
+PSSR7: Courses take place in locations where we have a department.
+DEPT update TE-query:
+   select distinct old_loc as loc
+   from v_ad_d_ute
+
+PSSR7: Courses take place in locations where we have a department.
+DEPT delete TE-query:
+   select distinct loc as loc
+   from v_ad_d_dte
+
+PSSR8: Trainer of offering must be employee with job TRAINER.
+OFFR insert TE-query:
+   select distinct trainer
+   from v_ad_o_ite o
+
+
+PSSR8: Trainer of offering must be employee with job TRAINER.
+OFFR update TE-query:
+   select distinct new_trainer as trainer
+   from v_ad_o_ute o
+   where (o.updated_trainer='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (o.updated_trainer='FALSE') and
+          142=142)
+
+PSSR8: Trainer of offering must be employee with job TRAINER.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          e.new_job<>'TRAINER' and
+             (not (e.old_job<>'TRAINER') or
+              ((142=1965) and
+               142=142)))
+      or ( not (e.updated_empno='FALSE') and
+          e.new_job<>'TRAINER')
+
+PTIJ1: Monthly salary must fall within assigned salary grade.
+EMP insert TE-query:
+   select distinct sgrade
+   from v_ad_e_ite e
+
+
+PTIJ1: Monthly salary must fall within assigned salary grade.
+EMP update TE-query:
+   select distinct new_sgrade as sgrade
+   from v_ad_e_ute e
+   where (e.updated_sgrade='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((e.updated_msal='TRUE') and
+               142=142)))
+      or ( not (e.updated_sgrade='FALSE') and
+          142=142)
+
+PTIJ1: Monthly salary must fall within assigned salary grade.
+GRD update TE-query:
+   select new_grade as grade
+   from v_ad_g_ute g
+   where (g.updated_grade='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((g.updated_llimit='TRUE' or g.updated_ulimit='TRUE') and
+               g.new_llimit > g.old_llimit or g.new_ulimit < g.old_ulimit)))
+      or ( not (g.updated_grade='FALSE') and
+          142=142)
+
+PTIJ10: You cannot register for overlapping courses.
+REG insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_r_ite
+
+PTIJ10: You cannot register for overlapping courses.
+OFFR update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_o_ute
+   where updated_course='TRUE' or updated_starts='TRUE'
+
+PTIJ10: You cannot register for overlapping courses.
+REG update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_r_ute
+   where updated_stud='TRUE' or updated_course='TRUE' or updated_starts='TRUE'
+
+PTIJ10: You cannot register for overlapping courses.
+CRS update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_c_ute
+   where updated_code='TRUE' or updated_dur='TRUE'
+
+PTIJ11: Trainer cannot teach courses before hiredate.
+OFFR insert TE-query:
+   select distinct trainer
+   from v_ad_o_ite o
+
+
+PTIJ11: Trainer cannot teach courses before hiredate.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((e.updated_hired='TRUE') and
+               e.new_hired > e.old_hired)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ11: Trainer cannot teach courses before hiredate.
+OFFR update TE-query:
+   select distinct new_trainer as trainer
+   from v_ad_o_ute o
+   where (o.updated_trainer='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((o.updated_starts='TRUE') and
+               o.new_starts < o.old_starts)))
+      or ( not (o.updated_trainer='FALSE') and
+          142=142)
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+TERM insert TE-query:
+   select distinct empno
+   from v_ad_t_ite t
+
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+OFFR insert TE-query:
+   select distinct course, trainer
+   from v_ad_o_ite o
+
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+CRS update TE-query:
+   select new_code as code
+   from v_ad_c_ute c
+   where (c.updated_code='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((c.updated_dur='TRUE') and
+               c.new_dur > c.old_dur)))
+      or ( not (c.updated_code='FALSE') and
+          142=142)
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+OFFR update TE-query:
+   select distinct new_course as course, new_trainer as trainer
+   from v_ad_o_ute o
+   where (o.updated_course='FALSE' and o.updated_trainer='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((o.updated_starts='TRUE') and
+               o.new_starts > o.old_starts)))
+      or ( not (o.updated_course='FALSE' and o.updated_trainer='FALSE') and
+          142=142)
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+TERM update TE-query:
+   select distinct new_empno as empno
+   from v_ad_t_ute t
+   where (t.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((t.updated_left='TRUE') and
+               t.new_left < t.old_left)))
+      or ( not (t.updated_empno='FALSE') and
+          142=142)
+
+PTIJ13: Trainer cannot register for offerings taught by him/herself.
+REG insert TE-query:
+   select distinct course, starts
+   from v_ad_r_ite r
+
+
+PTIJ13: Trainer cannot register for offerings taught by him/herself.
+OFFR update TE-query:
+   select new_course as course, new_starts as starts
+   from v_ad_o_ute o
+   where (o.updated_course='FALSE' and o.updated_starts='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((o.updated_trainer='TRUE') and
+               142=142)))
+      or ( not (o.updated_course='FALSE' and o.updated_starts='FALSE') and
+          142=142)
+
+PTIJ13: Trainer cannot register for offerings taught by him/herself.
+REG update TE-query:
+   select distinct new_course as course, new_starts as starts
+   from v_ad_r_ute r
+   where (r.updated_course='FALSE' and r.updated_starts='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((r.updated_stud='TRUE') and
+               142=142)))
+      or ( not (r.updated_course='FALSE' and r.updated_starts='FALSE') and
+          142=142)
+
+PTIJ14: You cannot teach different courses simultaneously.
+OFFR insert TE-query:
+   select distinct trainer as trainer
+   from v_ad_o_ite
+
+PTIJ14: You cannot teach different courses simultaneously.
+OFFR update TE-query:
+   select distinct new_trainer as trainer
+   from v_ad_o_ute
+   where updated_trainer='TRUE' or updated_course='TRUE' or updated_starts='TRUE'
+
+PTIJ14: You cannot teach different courses simultaneously.
+CRS update TE-query:
+   select distinct new_code as course
+   from v_ad_c_ute
+   where updated_code='TRUE'
+      or (updated_dur='TRUE' and new_dur>old_dur)
+
+PTIJ15: You cannot register for offering that overlaps with another one where you are the trainer.
+REG insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_r_ite
+
+PTIJ15: You cannot register for offering that overlaps with another one where you are the trainer.
+OFFR insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_o_ite
+
+PTIJ15: You cannot register for offering that overlaps with another one where you are the trainer.
+REG update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_r_ute
+   where updated_stud='TRUE' or updated_course='TRUE' or updated_starts='TRUE'
+
+PTIJ15: You cannot register for offering that overlaps with another one where you are the trainer.
+OFFR update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_o_ute
+   where updated_trainer='TRUE' or updated_course='TRUE' or updated_starts='TRUE'
+
+PTIJ15: You cannot register for offering that overlaps with another one where you are the trainer.
+CRS update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_c_ute
+   where updated_code='TRUE' or (updated_dur='TRUE' and new_dur>old_dur)
+
+PTIJ2: Leavedate must fall after hiredate.
+TERM insert TE-query:
+   select distinct empno
+   from v_ad_t_ite t
+
+
+PTIJ2: Leavedate must fall after hiredate.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((e.updated_hired='TRUE') and
+               e.new_hired > e.old_hired)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ2: Leavedate must fall after hiredate.
+TERM update TE-query:
+   select distinct new_empno as empno
+   from v_ad_t_ute t
+   where (t.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((t.updated_left='TRUE') and
+               t.new_left < t.old_left)))
+      or ( not (t.updated_empno='FALSE') and
+          142=142)
+
+PTIJ3: Salesreps cannot earn more than the employee they report to.
+MEMP insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_m_ite
+
+PTIJ3: Salesreps cannot earn more than the employee they report to.
+SREP insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_s_ite
+
+PTIJ3: Salesreps cannot earn more than the employee they report to.
+EMP update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_e_ute
+   where updated_empno='TRUE' or updated_msal='TRUE'
+
+PTIJ3: Salesreps cannot earn more than the employee they report to.
+MEMP update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_m_ute
+
+PTIJ3: Salesreps cannot earn more than the employee they report to.
+SREP update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_s_ute
+   where updated_empno='TRUE'
+      or (updated_comm='TRUE' and new_comm>old_comm)
+
+PTIJ4: Non-salesreps cannot earn more than the employee they report to.
+MEMP insert TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_m_ite
+
+PTIJ4: Non-salesreps cannot earn more than the employee they report to.
+EMP update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_e_ute
+   where updated_empno='TRUE' or updated_msal='TRUE'
+      or (updated_job='TRUE' and (old_job='SALESREP' and new_job<>'SALESREP'))
+
+PTIJ4: Non-salesreps cannot earn more than the employee they report to.
+MEMP update TE-query:
+   select distinct 'need to check' as no_cases
+   from v_ad_m_ute
+   where updated_empno='TRUE' or updated_mgr='TRUE'
+
+PTIJ6: No history records allowed at or before hiredate.
+HIST insert TE-query:
+   select distinct empno
+   from v_ad_h_ite h
+
+
+PTIJ6: No history records allowed at or before hiredate.
+HIST update TE-query:
+   select distinct new_empno as empno
+   from v_ad_h_ute h
+   where (h.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((h.updated_until='TRUE') and
+               h.new_until < h.old_until)))
+      or ( not (h.updated_empno='FALSE') and
+          142=142)
+
+PTIJ6: No history records allowed at or before hiredate.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((e.updated_hired='TRUE') and
+               e.new_hired > e.old_hired)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ7: No history records allowed at or after leavedate.
+HIST insert TE-query:
+   select distinct empno
+   from v_ad_h_ite h
+
+
+PTIJ7: No history records allowed at or after leavedate.
+TERM insert TE-query:
+   select distinct empno
+   from v_ad_t_ite t
+
+
+PTIJ7: No history records allowed at or after leavedate.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ7: No history records allowed at or after leavedate.
+HIST update TE-query:
+   select distinct new_empno as empno
+   from v_ad_h_ute h
+   where (h.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((h.updated_until='TRUE') and
+               h.new_until > h.old_until)))
+      or ( not (h.updated_empno='FALSE') and
+          142=142)
+
+PTIJ7: No history records allowed at or after leavedate.
+TERM update TE-query:
+   select distinct new_empno as empno
+   from v_ad_t_ute t
+   where (t.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((t.updated_left='TRUE') and
+               t.new_left < t.old_left)))
+      or ( not (t.updated_empno='FALSE') and
+          142=142)
+
+PTIJ8: You cannot register for offerings in 1st four weeks on the job.
+REG insert TE-query:
+   select distinct stud
+   from v_ad_r_ite r
+
+
+PTIJ8: You cannot register for offerings in 1st four weeks on the job.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((e.updated_hired='TRUE') and
+               e.new_hired > e.old_hired)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ8: You cannot register for offerings in 1st four weeks on the job.
+REG update TE-query:
+   select distinct new_stud as stud
+   from v_ad_r_ute r
+   where (r.updated_stud='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((r.updated_starts='TRUE') and
+               r.new_starts < r.old_starts)))
+      or ( not (r.updated_stud='FALSE') and
+          142=142)
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+REG insert TE-query:
+   select distinct stud, course, starts
+   from v_ad_r_ite r
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+TERM insert TE-query:
+   select distinct empno
+   from v_ad_t_ite t
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+OFFR update TE-query:
+   select new_course as course, new_starts as starts
+   from v_ad_o_ute o
+   where (o.updated_course='FALSE' and o.updated_starts='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (o.updated_course='FALSE' and o.updated_starts='FALSE') and
+          142=142)
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+TERM update TE-query:
+   select distinct new_empno as empno
+   from v_ad_t_ute t
+   where (t.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((t.updated_left='TRUE') and
+               t.new_left < t.old_left)))
+      or ( not (t.updated_empno='FALSE') and
+          142=142)
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+EMP update TE-query:
+   select new_empno as empno
+   from v_ad_e_ute e
+   where (e.updated_empno='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((142=1965) and
+               142=142)))
+      or ( not (e.updated_empno='FALSE') and
+          142=142)
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+CRS update TE-query:
+   select new_code as code
+   from v_ad_c_ute c
+   where (c.updated_code='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((c.updated_dur='TRUE') and
+               c.new_dur > c.old_dur)))
+      or ( not (c.updated_code='FALSE') and
+          142=142)
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+REG update TE-query:
+   select distinct new_stud as stud, new_course as course, new_starts as starts
+   from v_ad_r_ute r
+   where (r.updated_course='FALSE' and r.updated_starts='FALSE' and r.updated_stud='FALSE' and
+          142=142 and
+             (not (142=142) or
+              ((r.updated_starts='TRUE') and
+               r.new_starts > r.old_starts)))
+      or ( not (r.updated_course='FALSE' and r.updated_starts='FALSE' and r.updated_stud='FALSE') and
+          142=142)
+

@@ -1,0 +1,881 @@
+
+=========================================================================================================
+This textfile contains the constraint validation (CV) queries for all multi-tuple constraints of the 
+example database design. These queries check whether a violation can be found for the constraint.
+
+The CV-queries support execution model EM6 where the column values that are returned by the TE-queries
+are used as parameters. You'll see these as embedded bind variables (starting with :p_) in the CV-queries.
+=========================================================================================================
+
+
+D_TAB01: You cannot manage more than two departments.
+Constraint validation query:
+   select 'Manager '||:p_mgr||' is managing more than two departments.'
+   as msg
+   from (select count(*) as num_depts
+         from dept
+         where mgr = :p_mgr) d
+   where d.num_depts > 2
+
+E_TAB02: At most one PRESIDENT allowed.
+Constraint validation query:
+   select 'At most one PRESIDENT allowed (found '||to_char(num_presidents)||').'
+   as msg
+   from (select count(*) as num_presidents
+         from emp
+         where job='PRESIDENT')
+   where num_presidents > 1
+
+E_TAB03: Departments with PRESIDENT or MANAGER should have an ADMIN.
+Constraint validation query:
+   select 'Department '||:p_deptno||' employs PRESIDENT/MANAGER, but no ADMIN.'
+   as msg
+   from (select count(*) as num_pres_mgr
+         from emp
+         where job in ('PRESIDENT','MANAGER')
+           and deptno = :p_deptno) pm
+       ,(select count(*) as num_admin
+         from emp
+         where job = 'ADMIN'
+           and deptno = :p_deptno) a
+   where pm.num_pres_mgr > 0 and num_admin = 0
+
+G_TAB01: No gaps between two consecutive salary grades.
+Constraint validation query:
+   select 'Salary gap in front of grade '||grade||'.'
+   as msg
+   from (select g1.*
+         from grd g1
+         where exists (select g2.*
+                       from grd g2
+                       where g2.llimit < g1.llimit )
+           and not exists (select g3.*
+                           from grd g3
+                           where g3.llimit < g1.llimit
+                             and g3.ulimit >= g1.llimit
+                             and g3.ulimit < g1.ulimit))
+   where rownum = 1
+
+H_TAB01: Department number or monthly salary (or both) must have changed between two consecutive rows.
+Constraint validation query:
+   select 'Two consecutive HIST rows of employee '||:p_empno||' have same MSAL and DEPT values.'
+   as msg
+   from dual
+   where exists (select 'no difference found in two consecutive rows'
+                 from hist h1, hist h2
+                 where h1.empno=:p_empno and h2.empno=:p_empno
+                   and h1.until<h2.until
+                   and not exists (select 'in between'
+                                   from hist h3
+                                   where h3.empno=:p_empno
+                                     and h3.until>h1.until
+                                     and h3.until<h2.until)
+                   and h1.msal=h2.msal and h1.deptno=h2.deptno)
+
+R_TAB01: Offering cannot be partially evaluated: fully or not at all.
+Constraint validation query:
+   select 'Offering ['||:p_course||','||to_char(:p_starts,'DD/MM/YYYY')||'] is partially evaluated.'
+   as msg
+   from (select count(distinct case eval
+                               when -1 then -1
+                               else 1 end) as num_eval_types
+         from reg
+         where course = :p_course
+           and starts = :p_starts)
+   where num_eval_types = 2
+
+PODC1: Active employee cannot be managed by terminated employee.
+Constraint validation query:
+   select 'Terminated employee '||to_char(:p_mgr)||' currently manages (active) employees.'
+   as msg
+   from dual
+   where exists(select 'active emp managed by :p_mgr'
+                from memp m
+                where m.mgr = :p_mgr
+                  and not exists(select 'term-tuple for m.empno'
+                                 from term t
+                                 where t.empno = m.empno))
+
+PODC1: Active employee cannot be managed by terminated employee.
+Constraint validation query:
+   select '(Active) employee '||to_char(:p_empno)||' is managed by terminated manager.'
+   as msg
+   from dual
+   where exists(select 'this emp is active and its manager is terminated'
+                from memp m
+                where m.empno = :p_empno
+                  and not exists(select 'term-tuple for m.empno'
+                                 from term t
+                                 where t.empno = m.empno)
+                  and exists(select 'term-tuple for m.mgr'
+                             from term t
+                             where t.empno = m.mgr))
+
+PODC2: Department cannot be managed by a terminated employee.
+Constraint validation query:
+   select 'Terminated employee '||to_char(:p_mgr)||' cannot manage a department.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from term t
+                    ,dept d
+                where t.empno = d.mgr
+                  and t.empno = :p_mgr)
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+Constraint validation query:
+   select 'Half of offerings taught by trainer '||to_char(trainer)||' not at home-base.'
+   as msg
+   from        (select trainer
+                from (select distinct o.trainer
+                      from offr o
+                      where o.status<>'CANC') tr
+                where (select nvl(sum(c.dur),0)
+                       from dept d
+                           ,emp e
+                           ,offr o
+                           ,crs c
+                       where e.empno = tr.trainer
+                         and e.empno = o.trainer
+                         and e.deptno = d.deptno
+                         and o.course = c.code
+                         and o.status <> 'CANC'
+                         and o.loc = d.loc)
+                       <
+                       (select nvl(sum(c.dur),0)
+                       from dept d
+                           ,emp e
+                           ,offr o
+                           ,crs c
+                       where e.empno = tr.trainer
+                         and e.empno = o.trainer
+                         and e.deptno = d.deptno
+                         and o.course = c.code
+                         and o.status <> 'CANC'
+                         and o.loc <> d.loc))
+   where rownum = 1
+
+PODC3: At least half of the course-offerings taught by a trainer must be at home base.
+Constraint validation query:
+   select 'Half of offerings taught by trainer '||to_char(:p_trainer)||' not at home-base.'
+   as msg
+   from dual
+   where exists(select 'x'
+                from (select distinct o.trainer
+                      from offr o
+                      where o.status<>'CANC'
+                        and o.trainer = :p_trainer) tr
+                where (select nvl(sum(c.dur),0)
+                       from dept d
+                           ,emp e
+                           ,offr o
+                           ,crs c
+                       where e.empno = tr.trainer
+                         and e.empno = o.trainer
+                         and e.deptno = d.deptno
+                         and o.course = c.code
+                         and o.status <> 'CANC'
+                         and o.loc = d.loc)
+                       <
+                       (select nvl(sum(c.dur),0)
+                       from dept d
+                           ,emp e
+                           ,offr o
+                           ,crs c
+                       where e.empno = tr.trainer
+                         and e.empno = o.trainer
+                         and e.deptno = d.deptno
+                         and o.course = c.code
+                         and o.status <> 'CANC'
+                         and o.loc <> d.loc))
+
+PODC4: Offerings with 6+ registrations must have status confirmed.
+Constraint validation query:
+   select 'Offering ['||:p_course||','||to_char(:p_starts,'DDMMYY')||'] has more than 6 registrants yet is not confirmed.'
+   as msg
+   from offr o
+   where o.course = :p_course
+     and o.starts = :p_starts
+     and o.status <> 'CONF'
+     and 6 <= (select count(*)
+               from reg r
+               where r.course = o.course
+                 and r.starts = o.starts)
+
+PODC5: Number of registrations cannot exceed maximum capacity of offering.
+Constraint validation query:
+   select 'Registrations for offering ['||:p_course||','||to_char(:p_starts,'DDMMYY')||'] exceeds maximum capacity.'
+   as msg
+   from offr o
+   where o.course = :p_course
+     and o.starts = :p_starts
+     and o.maxcap < (select count(*)
+                     from reg r
+                     where r.course = o.course
+                       and r.starts = o.starts)
+
+PODC6: Cancelled offerings cannot have registrations.
+Constraint validation query:
+   select 'Cancelled offerings cannot have registrations. Violated by: '||
+          'REG[course, starts]=['||:p_course||','||:p_starts||']'
+   as msg
+   from offr o
+       ,reg r
+   where r.course = o.course
+     and r.starts = o.starts
+     and (o.status='CANC')
+     and not (0=1)
+     and r.course = :p_course
+     and r.starts = :p_starts
+
+
+PODC6: Cancelled offerings cannot have registrations.
+Constraint validation query:
+   select 'Cancelled offerings cannot have registrations. Violated by: '||
+          'OFFR[course, starts]=['||:p_course||','||:p_starts||']'
+   as msg
+   from offr o
+       ,reg r
+   where r.course = o.course
+     and r.starts = o.starts
+     and (o.status='CANC')
+     and not (0=1)
+     and o.course = :p_course
+     and o.starts = :p_starts
+
+
+PODC7: QA conditions regarding the trainer of an offering (see PODC7).
+Constraint validation query:
+   select 'QA conditions for trainer '||to_char(trainer)||' of offering starting at '||to_char(starts,'DD-MON-YY')||' are not met.'
+   as msg
+   from (select o1.trainer, o1.starts
+         from offr o1
+         where not
+         (exists (select o2.*
+                  from offr o2
+                  where o2.course = o1.course
+                    and o2.trainer = o1.trainer
+                    and o2.starts < o1.starts)
+         or
+         exists (select r1.*
+                 from reg r1
+                 where r1.course = o1.course
+                   and r1.starts = o1.starts
+                   and exists (select o3.*
+                               from offr o3
+                               where o3.trainer = r1.stud
+                                 and o3.course = o1.course
+                                 and o3.starts < o1.starts
+                                 and exists (select r2.*
+                                             from reg r2
+                                             where r2.course = o3.course
+                                               and r2.starts = o3.starts
+                                               and r2.stud = o1.trainer)))
+         or
+         o1.starts - 365 > (select e.hired
+                            from emp e
+                            where e.empno = o1.trainer)
+         ))
+   where rownum = 1
+
+PSPEC1A: Target and commission only allowed for Salesreps.
+Constraint validation query:
+   select 'Target and commission only allowed for Salesreps. Violated by: '||
+          'SREP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,srep s
+   where s.empno = e.empno
+     and (e.job<>'SALESREP')
+     and not (0=1)
+     and s.empno = :p_empno
+
+
+PSPEC1A: Target and commission only allowed for Salesreps.
+Constraint validation query:
+   select 'Target and commission only allowed for Salesreps. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,srep s
+   where s.empno = e.empno
+     and (e.job<>'SALESREP')
+     and not (0=1)
+     and e.empno = :p_empno
+
+
+PSPEC1B: Salesreps must have a target and commission.
+Constraint validation query:
+   select 'Salesrep '||to_char(:p_empno)||' must have a target and commission.'
+   as msg
+   from emp e
+   where e.empno = :p_empno
+     and not exists (select 'An SREP tuple'
+                     from srep s
+                     where s.empno = :p_empno)
+
+PSPEC2A: Presidents are not managed.
+Constraint validation query:
+   select 'Presidents are not managed. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,memp m
+   where m.empno = e.empno
+     and (e.job='PRESIDENT')
+     and not (0=1)
+     and e.empno = :p_empno
+
+
+PSPEC2A: Presidents are not managed.
+Constraint validation query:
+   select 'Presidents are not managed. Violated by: '||
+          'MEMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,memp m
+   where m.empno = e.empno
+     and (e.job='PRESIDENT')
+     and not (0=1)
+     and m.empno = :p_empno
+
+
+PSPEC2B: Employees (except presidents) must be managed.
+Constraint validation query:
+   select 'Employee '||to_char(:p_empno)||' must have a manager.'
+   as msg
+   from emp e
+   where e.empno = :p_empno
+     and not exists (select 'A MEMP tuple'
+                     from memp m
+                     where m.empno = :p_empno)
+
+PSSR2: Dept mgr is a known employee, excluding admins and president.
+Constraint validation query:
+   select 'Department manager '||to_char(:p_empno)||' cannot be PRESIDENT or ADMIN.'
+   as msg
+   from dual
+   where exists (select 'Pres/Admin :p_empno manages a dept'
+                 from emp e, dept d
+                 where e.empno=d.mgr
+                   and e.empno = :p_empno
+                   and e.job in ('ADMIN','PRESIDENT'))
+
+PSSR3: Only president or managers can manage other employees.
+Constraint validation query:
+   select 'Employee manager '||to_char(:p_mgr_empno)||' must be a PRESIDENT or MANAGER.'
+   as msg
+   from dual
+   where exists (select 'Non Pres/Manager :p_mgr_empno manages an employee'
+                 from emp e, memp m
+                 where e.empno=m.mgr
+                   and e.empno = :p_mgr_empno
+                   and e.job not in ('PRESIDENT','MANAGER'))
+
+PSSR4: Not all employees can be terminated.
+Constraint validation query:
+   select 'Not all employees can be terminated.'
+   as msg
+   from (select count(*) as emp_cnt from emp) e
+       ,(select count(*) as term_cnt from term) t
+   where e.emp_cnt > 0
+     and e.emp_cnt = t.term_cnt
+
+PSSR7: Courses take place in locations where we have a department.
+Constraint validation query:
+   select 'Offerings must take place at a known location (violated for location '||:p_loc||').'
+   as msg
+   from dual
+   where exists(select 'offering'
+                from offr o
+                where o.loc = :p_loc
+                  and not exists(select 'department'
+                                 from dept d
+                                 where d.loc = :p_loc))
+
+PSSR8: Trainer of offering must be employee with job TRAINER.
+Constraint validation query:
+   select 'Trainer of offering must be employee with job TRAINER. Violated by: '||
+          'OFFR[trainer]=['||:p_trainer||']'
+   as msg
+   from emp e
+       ,offr o
+   where o.trainer = e.empno
+     and (e.job<>'TRAINER')
+     and not (0=1)
+     and o.trainer = :p_trainer
+
+
+PSSR8: Trainer of offering must be employee with job TRAINER.
+Constraint validation query:
+   select 'Trainer of offering must be employee with job TRAINER. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,offr o
+   where o.trainer = e.empno
+     and (e.job<>'TRAINER')
+     and not (0=1)
+     and e.empno = :p_empno
+
+
+PTIJ1: Monthly salary must fall within assigned salary grade.
+Constraint validation query:
+   select 'Monthly salary must fall within assigned salary grade. Violated by: '||
+          'GRD[grade]=['||:p_grade||']'
+   as msg
+   from emp e
+       ,grd g
+   where e.sgrade = g.grade
+     and not (e.msal between g.llimit and g.ulimit)
+     and g.grade = :p_grade
+
+
+PTIJ1: Monthly salary must fall within assigned salary grade.
+Constraint validation query:
+   select 'Monthly salary must fall within assigned salary grade. Violated by: '||
+          'EMP[sgrade]=['||:p_sgrade||']'
+   as msg
+   from emp e
+       ,grd g
+   where e.sgrade = g.grade
+     and not (e.msal between g.llimit and g.ulimit)
+     and e.sgrade = :p_sgrade
+
+
+PTIJ10: You cannot register for overlapping courses.
+Constraint validation query:
+   select 'Registration for overlapping courses detected.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from reg r1
+                    ,reg r2
+                    ,offr o1
+                    ,offr o2
+                    ,crs c1
+                    ,crs c2
+                where r2.stud   = r1.stud
+                  and r1.course = o1.course
+                  and r1.starts = o1.starts
+                  and o1.course = c1.code
+                  and r2.course = o2.course
+                  and r2.starts = o2.starts
+                  and o2.course = c2.code
+                  and not((o1.course = o2.course and o1.starts = o2.starts) or
+                          o1.starts >= o2.starts + c2.dur or
+                          o2.starts >= o1.starts + c1.dur))
+
+PTIJ11: Trainer cannot teach courses before hiredate.
+Constraint validation query:
+   select 'Trainer cannot teach courses before hiredate. Violated by: '||
+          'OFFR[trainer]=['||:p_trainer||']'
+   as msg
+   from emp e
+       ,offr o
+   where o.trainer = e.empno
+     and not (e.hired <= o.starts)
+     and o.trainer = :p_trainer
+
+
+PTIJ11: Trainer cannot teach courses before hiredate.
+Constraint validation query:
+   select 'Trainer cannot teach courses before hiredate. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,offr o
+   where o.trainer = e.empno
+     and not (e.hired <= o.starts)
+     and e.empno = :p_empno
+
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+Constraint validation query:
+   select 'Trainer cannot teach courses at or after leavedate. Violated by: '||
+          'CRS[code]=['||:p_code||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,term t
+   where o.course = c.code
+     and o.trainer = e.empno
+     and t.empno = e.empno
+     and not (t.left >= o.starts + c.dur)
+     and c.code = :p_code
+
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+Constraint validation query:
+   select 'Trainer cannot teach courses at or after leavedate. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,term t
+   where o.course = c.code
+     and o.trainer = e.empno
+     and t.empno = e.empno
+     and not (t.left >= o.starts + c.dur)
+     and e.empno = :p_empno
+
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+Constraint validation query:
+   select 'Trainer cannot teach courses at or after leavedate. Violated by: '||
+          'TERM[empno]=['||:p_empno||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,term t
+   where o.course = c.code
+     and o.trainer = e.empno
+     and t.empno = e.empno
+     and not (t.left >= o.starts + c.dur)
+     and t.empno = :p_empno
+
+
+PTIJ12: Trainer cannot teach courses at or after leavedate.
+Constraint validation query:
+   select 'Trainer cannot teach courses at or after leavedate. Violated by: '||
+          'OFFR[course, trainer]=['||:p_course||','||:p_trainer||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,term t
+   where o.course = c.code
+     and o.trainer = e.empno
+     and t.empno = e.empno
+     and not (t.left >= o.starts + c.dur)
+     and o.course = :p_course
+     and o.trainer = :p_trainer
+
+
+PTIJ13: Trainer cannot register for offerings taught by him/herself.
+Constraint validation query:
+   select 'Trainer cannot register for offerings taught by him/herself. Violated by: '||
+          'REG[course, starts]=['||:p_course||','||:p_starts||']'
+   as msg
+   from offr o
+       ,reg r
+   where r.course = o.course
+     and r.starts = o.starts
+     and not (r.stud <> o.trainer)
+     and r.course = :p_course
+     and r.starts = :p_starts
+
+
+PTIJ13: Trainer cannot register for offerings taught by him/herself.
+Constraint validation query:
+   select 'Trainer cannot register for offerings taught by him/herself. Violated by: '||
+          'OFFR[course, starts]=['||:p_course||','||:p_starts||']'
+   as msg
+   from offr o
+       ,reg r
+   where r.course = o.course
+     and r.starts = o.starts
+     and not (r.stud <> o.trainer)
+     and o.course = :p_course
+     and o.starts = :p_starts
+
+
+PTIJ14: You cannot teach different courses simultaneously.
+Constraint validation query:
+   select 'Overlapping offerings for course '||:p_course||' are taught by same trainer.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from offr o1
+                    ,offr o2
+                    ,crs c1
+                    ,crs c2
+                where o1.trainer = o2.trainer
+                  and o1.course = c1.code
+                  and o2.course = c2.code
+                  and c1.code = :p_course
+                  and not((o1.course = o2.course and o1.starts = o2.starts) or
+                          o1.starts >= o2.starts + c2.dur or
+                          o2.starts >= o1.starts + c1.dur))
+
+PTIJ14: You cannot teach different courses simultaneously.
+Constraint validation query:
+   select 'Trainer '||to_char(:p_trainer)||' cannot teach overlapping offerings.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from offr o1
+                    ,offr o2
+                    ,crs c1
+                    ,crs c2
+                where o1.trainer = o2.trainer
+                  and o1.trainer = :p_trainer
+                  and o1.course = c1.code
+                  and o2.course = c2.code
+                  and not((o1.course = o2.course and o1.starts = o2.starts) or
+                          o1.starts >= o2.starts + c2.dur or
+                          o2.starts >= o1.starts + c1.dur))
+
+PTIJ15: You cannot register for offering that overlaps with another one where you are the trainer.
+Constraint validation query:
+   select 'Violation of PTIJ15 detected.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from reg r
+                    ,offr o1
+                    ,offr o2
+                    ,crs c1
+                    ,crs c2
+                where r.course = o1.course
+                  and r.starts = o1.starts
+                  and o1.course = c1.code
+                  and r.stud = o2.trainer
+                  and o2.course = c2.code
+                  and not((o1.course = o2.course and o1.starts = o2.starts) or
+                          o1.starts >= o2.starts + c2.dur or
+                          o2.starts >= o1.starts + c1.dur))
+
+PTIJ2: Leavedate must fall after hiredate.
+Constraint validation query:
+   select 'Leavedate must fall after hiredate. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,term t
+   where t.empno = e.empno
+     and not (e.hired < t.left)
+     and e.empno = :p_empno
+
+
+PTIJ2: Leavedate must fall after hiredate.
+Constraint validation query:
+   select 'Leavedate must fall after hiredate. Violated by: '||
+          'TERM[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,term t
+   where t.empno = e.empno
+     and not (e.hired < t.left)
+     and t.empno = :p_empno
+
+
+PTIJ3: Salesreps cannot earn more than the employee they report to.
+Constraint validation query:
+   select 'A salesrep earns more than his/her manager.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from srep s
+                    ,emp es
+                    ,memp m
+                    ,emp em
+                where s.empno = es.empno
+                  and es.empno = m.empno
+                  and m.mgr = em.empno
+                  and not (es.msal + (s.comm/12) < em.msal))
+
+PTIJ4: Non-salesreps cannot earn more than the employee they report to.
+Constraint validation query:
+   select 'A non-salesrep earns more than his/her manager.'
+   as msg
+   from dual
+   where exists(select 'Tuple in this join'
+                from emp e
+                    ,memp m
+                    ,emp em
+                where e.empno = m.empno
+                  and e.job <> 'SALESREP'
+                  and m.mgr = em.empno
+                  and not (e.msal < em.msal))
+
+PTIJ6: No history records allowed at or before hiredate.
+Constraint validation query:
+   select 'No history records allowed before hiredate. Violated by: '||
+          'HIST[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,hist h
+   where h.empno = e.empno
+     and not (e.hired < h.until)
+     and h.empno = :p_empno
+
+
+PTIJ6: No history records allowed at or before hiredate.
+Constraint validation query:
+   select 'No history records allowed before hiredate. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,hist h
+   where h.empno = e.empno
+     and not (e.hired < h.until)
+     and e.empno = :p_empno
+
+
+PTIJ7: No history records allowed at or after leavedate.
+Constraint validation query:
+   select 'No history records allowed after leavedate. Violated by: '||
+          'TERM[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,hist h
+       ,term t
+   where h.empno = e.empno
+     and t.empno = e.empno
+     and not (t.left > h.until)
+     and t.empno = :p_empno
+
+
+PTIJ7: No history records allowed at or after leavedate.
+Constraint validation query:
+   select 'No history records allowed after leavedate. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,hist h
+       ,term t
+   where h.empno = e.empno
+     and t.empno = e.empno
+     and not (t.left > h.until)
+     and e.empno = :p_empno
+
+
+PTIJ7: No history records allowed at or after leavedate.
+Constraint validation query:
+   select 'No history records allowed after leavedate. Violated by: '||
+          'HIST[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,hist h
+       ,term t
+   where h.empno = e.empno
+     and t.empno = e.empno
+     and not (t.left > h.until)
+     and h.empno = :p_empno
+
+
+PTIJ8: You cannot register for offerings in 1st four weeks on the job.
+Constraint validation query:
+   select 'You cannot register for offerings in 1st four weeks on the job. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from emp e
+       ,reg r
+   where r.stud = e.empno
+     and not (e.hired + interval '24' day <= r.starts)
+     and e.empno = :p_empno
+
+
+PTIJ8: You cannot register for offerings in 1st four weeks on the job.
+Constraint validation query:
+   select 'You cannot register for offerings in 1st four weeks on the job. Violated by: '||
+          'REG[stud]=['||:p_stud||']'
+   as msg
+   from emp e
+       ,reg r
+   where r.stud = e.empno
+     and not (e.hired + interval '24' day <= r.starts)
+     and r.stud = :p_stud
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+Constraint validation query:
+   select 'You cannot register for offerings given at or after leavedate. Violated by: '||
+          'OFFR[course, starts]=['||:p_course||','||:p_starts||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,reg r
+       ,term t
+   where o.course = c.code
+     and r.stud = e.empno
+     and r.course = o.course
+     and r.starts = o.starts
+     and t.empno = e.empno
+     and not (t.left >= r.starts + c.dur)
+     and o.course = :p_course
+     and o.starts = :p_starts
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+Constraint validation query:
+   select 'You cannot register for offerings given at or after leavedate. Violated by: '||
+          'TERM[empno]=['||:p_empno||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,reg r
+       ,term t
+   where o.course = c.code
+     and r.stud = e.empno
+     and r.course = o.course
+     and r.starts = o.starts
+     and t.empno = e.empno
+     and not (t.left >= r.starts + c.dur)
+     and t.empno = :p_empno
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+Constraint validation query:
+   select 'You cannot register for offerings given at or after leavedate. Violated by: '||
+          'EMP[empno]=['||:p_empno||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,reg r
+       ,term t
+   where o.course = c.code
+     and r.stud = e.empno
+     and r.course = o.course
+     and r.starts = o.starts
+     and t.empno = e.empno
+     and not (t.left >= r.starts + c.dur)
+     and e.empno = :p_empno
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+Constraint validation query:
+   select 'You cannot register for offerings given at or after leavedate. Violated by: '||
+          'REG[stud, course, starts]=['||:p_stud||','||:p_course||','||:p_starts||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,reg r
+       ,term t
+   where o.course = c.code
+     and r.stud = e.empno
+     and r.course = o.course
+     and r.starts = o.starts
+     and t.empno = e.empno
+     and not (t.left >= r.starts + c.dur)
+     and r.stud = :p_stud
+     and r.course = :p_course
+     and r.starts = :p_starts
+
+
+PTIJ9: You cannot register for offerings given at or after leavedate.
+Constraint validation query:
+   select 'You cannot register for offerings given at or after leavedate. Violated by: '||
+          'CRS[code]=['||:p_code||']'
+   as msg
+   from crs c
+       ,emp e
+       ,offr o
+       ,reg r
+       ,term t
+   where o.course = c.code
+     and r.stud = e.empno
+     and r.course = o.course
+     and r.starts = o.starts
+     and t.empno = e.empno
+     and not (t.left >= r.starts + c.dur)
+     and c.code = :p_code
+
